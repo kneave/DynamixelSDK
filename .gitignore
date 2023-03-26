@@ -127,3 +127,13 @@ fabric.properties
 .idea/caches/build_file_checksums.ser
 
 **/build/*
+python/src/nefive/temp_log.txt
+python/src/dynamixel_sdk.egg-info/top_level.txt
+python/src/dynamixel_sdk.egg-info/SOURCES.txt
+python/src/dynamixel_sdk.egg-info/requires.txt
+python/src/dynamixel_sdk.egg-info/dependency_links.txt
+python/dist/dynamixel_sdk-3.7.51-py3.10.egg
+python/src/dynamixel_sdk.egg-info/top_level.txt
+python/src/dynamixel_sdk.egg-info/SOURCES.txt
+python/src/dynamixel_sdk.egg-info/requires.txt
+python/src/dynamixel_sdk.egg-info/dependency_links.txt

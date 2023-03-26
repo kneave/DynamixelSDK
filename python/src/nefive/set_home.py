@@ -35,6 +35,7 @@
 import os
 from jointlist import servos
 import time
+from datetime import datetime
 
 if os.name == 'nt':
     import msvcrt
@@ -69,7 +70,7 @@ PROTOCOL_VERSION            = 2.0
 
 # Use the actual port assigned to the U2D2.
 # ex) Windows: "COM*", Linux: "/dev/ttyUSB*", Mac: "/dev/tty.usbserial-*"
-DEVICENAME                  = 'COM3'
+DEVICENAME                  = 'COM4'
 
 TORQUE_ENABLE               = 1     # Value for enabling the torque
 TORQUE_DISABLE              = 0     # Value for disabling the torque
@@ -198,13 +199,14 @@ def readAllTemperatures():
             print("[ID:%03d] groupSyncRead getdata failed" % servo_id)
             present_temperature[servo_id] = None
         else:
-            present_temperature[servo_id] = int(groupSyncRead.getData(servo_id, ADDR_PRESENT_POSITION, 1))
+            present_temperature[servo_id] = int(groupSyncRead.getData(servo_id, ADDR_PRESENT_TEMPERATURE, 1))
 
     return present_temperature
 
 def positionToAngle(position):
     current_angle = position * 0.088
     return round(current_angle, 2)
+
 def angleToPosition(angle):
     # convert angle to position value, note this is float to int
     position = int(angle / 0.088)
@@ -321,11 +323,22 @@ def getHomePositions():
 
 disableAllServos()
 
+log_file = open("temp_log.txt", "at")
+
 # Just print all the positions/temperatures
 while 1:
-    print(readAllTemperatures())
-    print(readAllPositions())
+    current_time = datetime.now()
+    line = "[{0}:{1}:{2}] : {3}\n".format(  current_time.hour,
+                                            current_time.minute,
+                                            current_time.second,
+                                            readAllTemperatures())
+    print(line)
+    log_file.write(line)
 
+    time.sleep(4)
+    # print(readAllPositions())
+
+log_file.close()
 # getHomePositions()
 moveToHome()
 portHandler.closePort()
