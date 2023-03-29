@@ -77,13 +77,13 @@ TORQUE_DISABLE              = 0     # Value for disabling the torque
 LED_ENABLE                  = 1     # Value for enabling the torque
 LED_DISABLE                 = 0     # Value for disabling the torque
 
-home_positions = {
-     100: -6.86, 101: 84.83, 102: 201.87, 103: 88.53, 104: 418.53, 105: 113.08, 106: -2.46, 107: 96.71,
-     108: 49.37, 109: 482.24, 110: -18.66, 111: 294.62, 112: 376.82, 113: 295.94, 114: 173.36, 115: -6.25
-}
+# home_positions =  {100: -11.35, 101: 295.33, 102: 110.53, 103: 79.9, 104: 69.78, 105: 110.7, 106: 371.89, 107: 74.27,
+#                    108: 337.3, 109: 498.96, 110: -346.19, 111: 313.19, 112: 353.58, 113: 256.43, 114: 157.87, 115: -27.28}
 
-home_positions = {100: -0.62, 101: 234.26, 102: 192.02, 103: 99.44, 104: 442.11, 105: 129.71, 106: 360.18, 107: 98.3, 108: 31.33,
- 109: 482.24, 110: -370.74, 111: 294.8, 112: 363.0, 113: 266.82, 114: 166.41, 115: -63.8}
+home_positions = \
+    {100: 192.9, 101: 246.93, 102: 110.7, 103: 60.37, 104: 366.7, 105: 82.81, 106: 325.86, 107: 98.12,
+     108: 347.51, 109: 146.08, 110: 354.99, 111: 305.54, 112: 355.17, 113: 259.69, 114: 183.13, 115: 323.93}
+
 
 # Initialize PortHandler instance
 # Set the port path
@@ -295,6 +295,8 @@ def moveToHome():
     print("press any key to disable servos and exit")
     getch()
 
+    readAllTemperatures()
+
     disableAllServos()
 
 def getHomePositions():
@@ -321,24 +323,27 @@ def getHomePositions():
     disableAllServos()
     # Close port
 
-disableAllServos()
+def loopReadTemperature():
+    log_file = open("temp_log.txt", "at")
 
-log_file = open("temp_log.txt", "at")
+    # Just print all the positions/temperatures
+    while 1:
+        current_time = datetime.now()
+        line = "[{0}:{1}:{2}] : {3}\n".format(current_time.hour,
+                                              current_time.minute,
+                                              current_time.second,
+                                              readAllTemperatures())
+        print(line)
+        log_file.write(line)
 
-# Just print all the positions/temperatures
-while 1:
-    current_time = datetime.now()
-    line = "[{0}:{1}:{2}] : {3}\n".format(  current_time.hour,
-                                            current_time.minute,
-                                            current_time.second,
-                                            readAllTemperatures())
-    print(line)
-    log_file.write(line)
+        time.sleep(4)
+        # print(readAllPositions())
 
-    time.sleep(4)
-    # print(readAllPositions())
+    log_file.close()
 
-log_file.close()
+
 # getHomePositions()
 moveToHome()
+
+disableAllServos()
 portHandler.closePort()

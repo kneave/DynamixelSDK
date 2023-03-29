@@ -158,7 +158,7 @@ def getAngleFromPosition(id, position):
 
     position_signed = int.from_bytes(current_position, "little", signed=True)
     current_angle = position_signed * 0.088
-    current_angle = round(current_angle, 2)
+    return round(current_angle, 2)
 
 angles = {}
 for key, value in servos.items():
