@@ -137,3 +137,5 @@ python/src/dynamixel_sdk.egg-info/top_level.txt
 python/src/dynamixel_sdk.egg-info/SOURCES.txt
 python/src/dynamixel_sdk.egg-info/requires.txt
 python/src/dynamixel_sdk.egg-info/dependency_links.txt
+python/temp_log.txt
+python/servo/*
