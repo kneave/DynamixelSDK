@@ -59,6 +59,7 @@ from dynamixel_sdk import * # Uses Dynamixel SDK library
 ADDR_HOMING_OFFSET          = 20
 ADDR_TORQUE_ENABLE          = 64
 ADDR_LED_RED                = 65
+ADDR_ERROR_STATUS           = 70
 ADDR_GOAL_POSITION          = 116
 ADDR_PRESENT_POSITION       = 132
 ADDR_PRESENT_TEMPERATURE    = 146
@@ -70,7 +71,8 @@ PROTOCOL_VERSION            = 2.0
 
 # Use the actual port assigned to the U2D2.
 # ex) Windows: "COM*", Linux: "/dev/ttyUSB*", Mac: "/dev/tty.usbserial-*"
-DEVICENAME                  = 'COM4'
+# DEVICENAME                  = 'COM4'
+DEVICENAME                  = '/dev/ttyUSB0'
 
 TORQUE_ENABLE               = 1     # Value for enabling the torque
 TORQUE_DISABLE              = 0     # Value for disabling the torque
@@ -81,9 +83,8 @@ LED_DISABLE                 = 0     # Value for disabling the torque
 #                    108: 337.3, 109: 498.96, 110: -346.19, 111: 313.19, 112: 353.58, 113: 256.43, 114: 157.87, 115: -27.28}
 
 home_positions = \
-    {100: 192.9, 101: 246.93, 102: 110.7, 103: 60.37, 104: 366.7, 105: 82.81, 106: 325.86, 107: 98.12,
-     108: 347.51, 109: 146.08, 110: 354.99, 111: 305.54, 112: 355.17, 113: 259.69, 114: 183.13, 115: 323.93}
-
+    {100: 177.67, 101: 256.52, 102: 111.94, 103: 55.97, 104: 15.05, 105: 97.24, 106: 347.34, 107: 97.59, 
+     108: 342.76, 109: 134.64, 110: -10.47, 111: 295.5, 112: 354.29, 113: 266.64, 114: 194.39, 115: 15.58}
 
 # Initialize PortHandler instance
 # Set the port path
@@ -220,6 +221,26 @@ def readAllTemperatures():
             present_temperature[servo_id] = int(groupSyncRead.getData(servo_id, ADDR_PRESENT_TEMPERATURE, 1))
 
     return present_temperature
+
+def readAllHardwareStatus():
+    groupSyncRead = GroupSyncRead(portHandler, packetHandler, ADDR_ERROR_STATUS, 1)
+    for servo_name, servo_id in servos.items():
+        dxl_addparam_result = groupSyncRead.addParam(servo_id)
+
+    dxl_comm_result = groupSyncRead.txRxPacket()
+    if dxl_comm_result != COMM_SUCCESS:
+        print("%s" % packetHandler.getTxRxResult(dxl_comm_result))
+
+    present_state = {}
+    for servo_name, servo_id in servos.items():
+        dxl_getdata_result = groupSyncRead.isAvailable(servo_id, ADDR_ERROR_STATUS, 1)
+        if dxl_getdata_result != True:
+            print("[ID:%03d] groupSyncRead getdata failed" % servo_id)
+            present_state[servo_id] = None
+        else:
+            present_state[servo_id] = int(groupSyncRead.getData(servo_id, ADDR_ERROR_STATUS, 1))
+
+    return present_state
 
 def positionToAngle(position):
     current_angle = position * 0.088
@@ -367,6 +388,20 @@ def get_key():
     else:
         return first_char
 
+error_states = readAllHardwareStatus()
+for servo_name, servo_id in servos.items():
+    if not error_states[servo_id] == 0:
+        print(f"[{servo_id}]: {error_states[servo_id]}")
+
+        dxl_comm_result, dxl_error = packetHandler.reboot(portHandler, servo_id)
+        if dxl_comm_result != COMM_SUCCESS:
+            print("%s" % packetHandler.getTxRxResult(dxl_comm_result))
+        elif dxl_error != 0:
+            print("%s" % packetHandler.getRxPacketError(dxl_error))
+
+        print("[ID:%03d] reboot Succeeded\n" % servo_id)
+
+# disableAllServos()
 # getHomePositions()
 # moveToHome()
 
@@ -408,7 +443,6 @@ else:
     print("Servos missing, check log and resolve.")
     print("Exiting")
     exit()
-
 
 disableAllServos()
 portHandler.closePort()
