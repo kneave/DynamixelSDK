@@ -146,6 +146,19 @@ def readAllPositions():
     return present_position
 
 
+def pingServos():
+    # Try to broadcast ping the Dynamixel
+    dxl_data_list, dxl_comm_result = packetHandler.broadcastPing(portHandler)
+    if dxl_comm_result != COMM_SUCCESS:
+        print("Error pinging: %s" % packetHandler.getTxRxResult(dxl_comm_result))
+
+    detected = []
+    for dxl_id in dxl_data_list:
+        detected.append(dxl_id)
+
+    return detected
+
+
 # dxl_addparam_result = groupSyncWrite.addParam(DXL1_ID, param_goal_position)
 
 # Open port
@@ -180,7 +193,7 @@ def positionToSigned(position):
 
     return position
 
-def getCurrentAngle(servo_id):
+def getCurrentPosition(servo_id):
     position, result, error = \
         packetHandler.readTxRx(portHandler, servo_id, ADDR_PRESENT_POSITION, 4)
     if result != COMM_SUCCESS:
@@ -190,9 +203,14 @@ def getCurrentAngle(servo_id):
         print("%s" % packetHandler.getRxPacketError(error))
         return
     data_array = bytes([position[0], position[1], position[2], position[3]])
-    position_signed = int.from_bytes(data_array, "little", signed=True)
+    return int.from_bytes(data_array, "little", signed=True)
+
+
+def getCurrentAngle(servo_id):
+    position_signed = getCurrentPosition(servo_id)
     current_angle = position_signed * 0.088
     return round(current_angle, 2)
+
 
 def readAllTemperatures():
     groupSyncRead = GroupSyncRead(portHandler, packetHandler, ADDR_PRESENT_TEMPERATURE, 1)
@@ -374,6 +392,13 @@ def loopReadTemperature():
     log_file.close()
 
 
+def get_key():
+    first_char = getch()
+    if first_char == '\x1b':
+        return {'[A': 'up', '[B': 'down', '[C': 'right', '[D': 'left'}[getch() + getch()]
+    else:
+        return first_char
+
 error_states = readAllHardwareStatus()
 for servo_name, servo_id in servos.items():
     if not error_states[servo_id] == 0:
@@ -388,7 +413,6 @@ for servo_name, servo_id in servos.items():
         print("[ID:%03d] reboot Succeeded\n" % servo_id)
 
 # disableAllServos()
-
 # getHomePositions()
 #moveToHome()
 
