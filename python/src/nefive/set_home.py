@@ -32,7 +32,7 @@
 #  Maintainer : Zerom, Will Son
 # *******************************************************************************
 
-import os
+import os, ctypes
 from jointlist import servos
 import time
 from datetime import datetime
@@ -83,8 +83,8 @@ LED_DISABLE                 = 0     # Value for disabling the torque
 #                    108: 337.3, 109: 498.96, 110: -346.19, 111: 313.19, 112: 353.58, 113: 256.43, 114: 157.87, 115: -27.28}
 
 home_positions = \
-    {100: 177.67, 101: 256.52, 102: 111.94, 103: 55.97, 104: 15.05, 105: 97.24, 106: 347.34, 107: 97.59, 
-     108: 342.76, 109: 134.64, 110: -10.47, 111: 295.5, 112: 354.29, 113: 266.64, 114: 194.39, 115: 15.58}
+    {100: 186.38, 101: 257.58, 102: 101.29, 103: 59.4, 104: -2.73, 105: 104.63, 106: 348.13, 107: 76.82, 
+     108: 345.58, 109: 147.84, 110: -17.34, 111: 294.89, 112: 348.92, 113: 265.32, 114: 192.81, 115: 7.57}
 
 # Initialize PortHandler instance
 # Set the port path
@@ -102,6 +102,7 @@ def setAllAngles(angles):
         positions[servo_id] = angleToPosition(angles[servo_id])
 
     setAllPositions(positions)
+    
 def setAllPositions(positions):
     groupSyncWrite = GroupSyncWrite(portHandler, packetHandler, ADDR_GOAL_POSITION, 4)
     for servo_name, servo_id in servos.items():
@@ -118,8 +119,9 @@ def setAllPositions(positions):
 
 def readAllAngles():
     angles = {}
+    positions = readAllPositions()
     for servo_name, servo_id in servos.items():
-        angles[servo_id] = getCurrentAngle(servo_id)
+        angles[servo_id] = positionToAngle(positions[servo_id])
     return angles
 
 def readAllPositions():
@@ -137,7 +139,9 @@ def readAllPositions():
         if dxl_getdata_result != True:
             print("[ID:%03d] groupSyncRead getdata failed" % servo_id)
 
-        present_position[servo_id] = positionToAngle(groupSyncRead.getData(servo_id, ADDR_PRESENT_POSITION, 4))
+
+        position = groupSyncRead.getData(servo_id, ADDR_PRESENT_POSITION, 4)
+        present_position[servo_id] = positionToSigned(position)
 
     return present_position
 
@@ -169,6 +173,12 @@ def setLED(id, value):
         print(f"setLED for id {id}: {packetHandler.getTxRxResult(dxl_comm_result)}")
     elif dxl_error != 0:
         print(f"setLED for id {id}: {packetHandler.getRxPacketError(dxl_error)}")
+
+def positionToSigned(position):
+    if position > 2147483647:
+        position = position - 4294967296
+
+    return position
 
 def getCurrentAngle(servo_id):
     position, result, error = \
@@ -236,7 +246,7 @@ def angleToPosition(angle):
 
 
 def setAngle(servo_id, angle):
-    position = angleToPosition(angle);
+    position = angleToPosition(angle)
     # print(position)
 
     dxl_comm_result, dxl_error = packetHandler.write4ByteTxRx(
@@ -259,6 +269,7 @@ def setHomingOffset(servo_id, angle):
         print("%s" % packetHandler.getTxRxResult(dxl_comm_result))
     elif dxl_error != 0:
         print("%s" % packetHandler.getRxPacketError(dxl_error))
+
 def setServoTorque(servo_id, value):
     dxl_comm_result, dxl_error = packetHandler.write1ByteTxRx(portHandler, servo_id, ADDR_TORQUE_ENABLE, value)
     if dxl_comm_result != COMM_SUCCESS:
@@ -379,9 +390,36 @@ for servo_name, servo_id in servos.items():
 # disableAllServos()
 
 # getHomePositions()
-# moveToHome()
+#moveToHome()
 
-loopReadTemperature()
+# getch()
+
+# loopReadTemperature()
+
+# print(f"Angles: {readAllAngles()}")
+# print(f"Positions: {readAllPositions()}")
+# print(f"Errors: {readAllHardwareStatus()}")
+
+
+servo_limits = {}
+min_value = 0
+max_value = 1
+
+for servo_name, servo_id in servos.items():
+    # each tuple is {min_value, max_value}
+    servo_limits[servo_id] = [ 100000, -100000 ]
+
+while 1:
+    current_positions = readAllPositions()
+    for servo_name, servo_id in servos.items():
+        if current_positions[servo_id] >= servo_limits[servo_id][max_value]:
+            servo_limits[servo_id][max_value] = current_positions[servo_id]
+            
+        if current_positions[servo_id] <= servo_limits[servo_id][min_value]:
+            servo_limits[servo_id][min_value] = current_positions[servo_id]
+
+    print(servo_limits)
+
 
 disableAllServos()
 portHandler.closePort()
