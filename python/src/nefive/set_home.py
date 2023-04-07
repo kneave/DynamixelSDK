@@ -86,6 +86,8 @@ home_positions = \
     {100: 186.38, 101: 257.58, 102: 101.29, 103: 59.4, 104: -2.73, 105: 104.63, 106: 348.13, 107: 76.82, 
      108: 345.58, 109: 147.84, 110: -17.34, 111: 294.89, 112: 348.92, 113: 265.32, 114: 192.81, 115: 7.57}
 
+servo_limits = {100: [955, 2852], 101: [-1774, 1375], 102: [-2857, 2076], 103: [530, 3333], 104: [-4109, 4251], 105: [13, 1974], 106: [3176, 5096], 107: [779, 1896], 108: [3325, 5436], 109: [-3186, 1746], 110: [2152, 5663], 111: [863, 3424], 112: [4790, 11517], 113: [2049, 4067], 114: [1049, 2942], 115: [3214, 4269]}
+
 # Initialize PortHandler instance
 # Set the port path
 # Get methods and members of PortHandlerLinux or PortHandlerWindows
@@ -442,7 +444,7 @@ while 1:
         if current_positions[servo_id] <= servo_limits[servo_id][min_value]:
             servo_limits[servo_id][min_value] = current_positions[servo_id]
 
-    print(servo_limits)
+    print(f"{servo_limits}")
 
 
 disableAllServos()
