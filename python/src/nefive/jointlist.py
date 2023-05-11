@@ -14,5 +14,8 @@ servos = {
     "RIGHT_WRIST_ROTATE":        112,
     "RIGHT_WRIST_LEFTRIGHT":     113,
     "RIGHT_WRIST_UPDOWN":        114,
-    "RIGHT_HAND":                115
+    "RIGHT_HAND":                115,
+    "NECK_PAN":                  116,
+    "NECK_TILT":                 117,
+    "NECK_ROLL":                 118,
 }
