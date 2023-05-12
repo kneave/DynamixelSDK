@@ -34,11 +34,25 @@
 
 import os, ctypes
 from jointlist import servos
-from wake_up import wakeup_angles
+from wake_up import wakeup_angles, head_stretching, arms_stretching
 import time
 from datetime import datetime
 import signal
+import keyboard
 
+if os.name == 'nt':
+    import msvcrt
+else:
+    import sys, select
+
+def kbhit():
+    ''' Returns True if a keypress is waiting to be read in stdin, False otherwise.
+    '''
+    if os.name == 'nt':
+        return msvcrt.kbhit()
+    else:
+        dr,dw,de = select.select([sys.stdin], [], [], 0)
+        return dr != []
 
 def exit_handler(signum, frame):
     print("ctrl-c pressed, exiting")
@@ -71,6 +85,9 @@ ADDR_HOMING_OFFSET          = 20
 ADDR_TORQUE_ENABLE          = 64
 ADDR_LED_RED                = 65
 ADDR_ERROR_STATUS           = 70
+ADDR_PID_POSITION_P         = 80
+ADDR_PID_POSITION_I         = 82
+ADDR_PID_POSITION_D         = 84
 ADDR_GOAL_CURRENT           = 102
 ADDR_GOAL_POSITION          = 116
 ADDR_PRESENT_POSITION       = 132
@@ -100,7 +117,7 @@ home_positions = {
     116: 173.8, 117: 179.17, 118: 178.29}
 
 current_position_current_limits = {  
-    100: 100, 101: 50, 102: 75, 103: 150, 104: 70, 105: 40, 106: 50, 107: 50, 
+    100: 150, 101: 75, 102: 75, 103: 150, 104: 70, 105: 40, 106: 50, 107: 50, 
     108: 100, 109: 50, 110: 75, 111: 150, 112: 70, 113: 40, 114: 50, 115: 50,
     116: 100, 117: 50, 118: 60}
 
@@ -149,6 +166,9 @@ def setAllPositions(positions):
 def readAllAngles():
     angles = {}
     positions = readAllPositions()
+    if positions == None:
+        return None
+    
     for servo_name, servo_id in servos.items():
         angles[servo_id] = positionToAngle(positions[servo_id])
     return angles
@@ -167,6 +187,7 @@ def readAllPositions():
         dxl_getdata_result = groupSyncRead.isAvailable(servo_id, ADDR_PRESENT_POSITION, 4)
         if dxl_getdata_result != True:
             print("[ID:%03d] groupSyncRead getdata failed" % servo_id)
+            return None
 
 
         position = groupSyncRead.getData(servo_id, ADDR_PRESENT_POSITION, 4)
@@ -223,6 +244,27 @@ def setCurrentGoal(id, value):
     elif dxl_error != 0:
         print(f"setCurrentGoal for id {id}: {packetHandler.getRxPacketError(dxl_error)}")
 
+
+def setPositionPID(id, p, i, d):
+    print(f"Setting PID for Servo {id} to {p}, {i}, {d}")
+    
+    dxl_comm_result, dxl_error = packetHandler.write2ByteTxRx(portHandler, id, ADDR_PID_POSITION_P, p)
+    if dxl_comm_result != COMM_SUCCESS:
+        print(f"setPositionPID P for id {id}: {packetHandler.getTxRxResult(dxl_comm_result)}")
+    elif dxl_error != 0:
+        print(f"setPositionPID P for id {id}: {packetHandler.getRxPacketError(dxl_error)}")
+
+    dxl_comm_result, dxl_error = packetHandler.write2ByteTxRx(portHandler, id, ADDR_PID_POSITION_I, i)
+    if dxl_comm_result != COMM_SUCCESS:
+        print(f"setPositionPID I for id {id}: {packetHandler.getTxRxResult(dxl_comm_result)}")
+    elif dxl_error != 0:
+        print(f"setPositionPID I for id {id}: {packetHandler.getRxPacketError(dxl_error)}")
+        
+    dxl_comm_result, dxl_error = packetHandler.write2ByteTxRx(portHandler, id, ADDR_PID_POSITION_D, d)
+    if dxl_comm_result != COMM_SUCCESS:
+        print(f"setPositionPID D for id {id}: {packetHandler.getTxRxResult(dxl_comm_result)}")
+    elif dxl_error != 0:
+        print(f"setPositionPID D for id {id}: {packetHandler.getRxPacketError(dxl_error)}")
 
 def setLED(id, value):
     dxl_comm_result, dxl_error = packetHandler.write1ByteTxRx(portHandler, id, ADDR_LED_RED, value)
@@ -343,20 +385,6 @@ def setServoTorque(servo_id, value):
     elif dxl_error != 0:
         print("SetServo: %s" % packetHandler.getRxPacketError(dxl_error))
 
-# set all servos to current-position mode
-def setOperatingModes(value):
-    for servo_name, servo_id in servos.items():
-        setServoTorque(servo_id, 0)
-        setOperatingMode(servo_id, value)
-
-        if value == 5:
-            setCurrentGoal(servo_id, current_position_current_limits[servo_id])
-
-        if value == 3:
-            setCurrentGoal(servo_id, position_mode_current_limits[servo_id])
-
-        setServoTorque(servo_id, 1)
-
 
 # Disable all LEDs and servos
 def disableAllServos():
@@ -388,6 +416,23 @@ def lerpToAngles(angles, lerp_time):
                 continue
             new_angles[servo_id] = value
         setAllAngles(new_angles)
+        
+        time.sleep(interval)
+
+
+def lerpToPositions(positions, lerp_time):
+    start_positions = readAllPositions()
+    interval = lerp_time / 100
+    print(f"Lerp interval: {interval}")
+    for i in range(100):
+        new_positions = {}
+        for servo_name, servo_id in servos.items():
+            value = int(lerp(start_positions[servo_id], positions[servo_id], i / 100))
+            if value == None:
+                print(f"Unable to set position for {servo_name}")
+                continue
+            new_positions[servo_id] = value
+        setAllPositions(new_positions)
         
         time.sleep(interval)
 
@@ -452,28 +497,6 @@ def getHomePositions():
     # Close port
 
 
-def learnPositions():
-    positions_in_order = []
-
-    while True:
-        print(f"[{servo_name}] please move to new position and press any key to continue or ESC to quit")
-        if getch() == chr(0x1b):
-            break
-
-        # Read present positions
-        currentPositions = readAllAngles()
-        setAllAngles(currentPositions)
-        positions_in_order.append(currentPositions)
-
-    print(f"Home positions: {positions_in_order}")
-
-    print("press any key to disable servos and exit")
-    getch()
-
-    disableAllServos()
-    # Close port
-
-
 def loopReadTemperature():
     log_file = open("temp_log.txt", "at")
 
@@ -524,16 +547,16 @@ def get_key():
 
 error_states = readAllHardwareStatus()
 for servo_name, servo_id in servos.items():
-    if not error_states[servo_id] == 0:
-        print(f"[{servo_id}]: {error_states[servo_id]}")
+    # if not error_states[servo_id] == 0:
+    print(f"[{servo_id}]: {error_states[servo_id]}")
 
-        dxl_comm_result, dxl_error = packetHandler.reboot(portHandler, servo_id)
-        if dxl_comm_result != COMM_SUCCESS:
-            print("%s" % packetHandler.getTxRxResult(dxl_comm_result))
-        elif dxl_error != 0:
-            print("%s" % packetHandler.getRxPacketError(dxl_error))
+    dxl_comm_result, dxl_error = packetHandler.reboot(portHandler, servo_id)
+    if dxl_comm_result != COMM_SUCCESS:
+        print("%s" % packetHandler.getTxRxResult(dxl_comm_result))
+    elif dxl_error != 0:
+        print("%s" % packetHandler.getRxPacketError(dxl_error))
 
-        print("[ID:%03d] reboot Succeeded\n" % servo_id)
+    # print("[ID:%03d] reboot Succeeded\n" % servo_id)
 
 disableAllServos()
 # getHomePositions()
@@ -545,20 +568,101 @@ disableAllServos()
 
 # loopReadTemperature()
 
+# set all servos to current-position mode
+def setOperatingModes(value):
+    for servo_name, servo_id in servos.items():
+        setServoTorque(servo_id, 0)
+        setOperatingMode(servo_id, value)
+
+        if value == 5:
+            setCurrentGoal(servo_id, current_position_current_limits[servo_id])
+            setPositionPID(servo_id, 0, 0, 200)
+            
+        if value == 3:
+            setCurrentGoal(servo_id, position_mode_current_limits[servo_id])
+
+        setServoTorque(servo_id, 1)
+
+
+def learnPositions():
+    positions_in_order = []
+    ch = ""
+    while True:
+        
+        print(f"Please move to new positions and press any key to continue or esc to finish")
+        
+        if getch() == chr(0x1b):
+            break
+        
+        currentPositions = readAllPositions()
+            # if currentPositions != None:
+            #     print(f"setting positions: {currentPositions}")
+            #     setAllPositions(currentPositions)
+            
+                   
+        # Append present positions to list
+        positions_in_order.append(currentPositions)
+                
+
+    print(f"Home positions: {positions_in_order}")
+
+    print("press any key to disable servos and exit")
+    getch()
+
+    disableAllServos()
+    # Close port
+
+
 # print(f"Angles: {readAllAngles()}")
 # print(f"Positions: {readAllPositions()}")
 # print(f"Errors: {readAllHardwareStatus()}")
 def learnSomeMoves():
-    setOperatingModes(5)
+    # setOperatingModes(5)
     learnPositions()
 
+
+# learnSomeMoves()
+
+# # setOperatingModes(3)
+# tidy_angles = []
+# for angles in wakeup_angles:
+#     # print(angles)
+#     # lerpToAngles(angles, 1)
+#     # time.sleep(1)
+#     new_angles = {}
+#     for id, value in angles.items():
+#         new_angles[id] = round(value, 0)
+    
+#     tidy_angles.append(new_angles)
+
+# print(tidy_angles)
+
+def wakeUpRoutine():
+    # first get positions of all servos
+    start_positions = readAllPositions()
+    
+    # use these to fill in the gaps of the head movements
+    start_positions[116] = head_stretching[0][116]
+    start_positions[117] = head_stretching[0][117]
+    start_positions[118] = head_stretching[0][118]
+    lerpToPositions(start_positions, 1)
+    
+    for i in range(1, 7):        
+        start_positions[116] = head_stretching[i][116]
+        start_positions[117] = head_stretching[i][117]
+        start_positions[118] = head_stretching[i][118]
+        lerpToPositions(start_positions, 0.5)
+    
+    lerpToPositions(arms_stretching[0],1)
+    
+    for i in range(1, 6):
+        lerpToPositions(arms_stretching[i], 0.75)
+
+
+
 setOperatingModes(3)
-for angles in wakeup_angles:
-    print(angles)
-    lerpToAngles(angles, 1)
-    # time.sleep(1)
+wakeUpRoutine()
 
 getch()
-
 disableAllServos()
 portHandler.closePort()
