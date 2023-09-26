@@ -36,9 +36,15 @@ import os, ctypes
 from jointlist import servos
 from wake_up import wakeup_angles, head_stretching, arms_stretching
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 import signal
-import keyboard
+
+import board
+import neopixel
+
+import threading
+
+pixels = neopixel.NeoPixel(board.D12, 32)
 
 if os.name == 'nt':
     import msvcrt
@@ -101,7 +107,7 @@ PROTOCOL_VERSION            = 2.0
 # Use the actual port assigned to the U2D2.
 # ex) Windows: "COM*", Linux: "/dev/ttyUSB*", Mac: "/dev/tty.usbserial-*"
 # DEVICENAME                  = 'COM4'
-DEVICENAME                  = '/dev/ttyUSB1'
+DEVICENAME                  = '/dev/ttyUSB0'
 
 TORQUE_ENABLE               = 1     # Value for enabling the torque
 TORQUE_DISABLE              = 0     # Value for disabling the torque
@@ -496,19 +502,29 @@ def getHomePositions():
     disableAllServos()
     # Close port
 
+def convert_timedelta(duration):
+    days, seconds = duration.days, duration.seconds
+    hours = days * 24 + seconds // 3600
+    minutes = (seconds % 3600) // 60
+    seconds = (seconds % 60)
+    return hours, minutes, seconds
 
 def loopReadTemperature():
     log_file = open("temp_log.txt", "at")
 
+    start_time = datetime.now()
+
     # Just print all the positions/temperatures
     while 1:
         current_time = datetime.now()
-        line = "[{0}:{1}:{2}] : {3}\n".format(current_time.hour,
-                                              current_time.minute,
-                                              current_time.second,
+        uptime = current_time - start_time
+
+        hours, minutes, seconds = convert_timedelta(uptime)
+
+        line = "[{0}:{1}:{2}] : {3}\n".format(hours, minutes, seconds,
                                               readAllTemperatures())
         print(line)
-        log_file.write(line)
+        # log_file.write(line)
 
         time.sleep(4)
         # print(readAllPositions())
@@ -637,6 +653,62 @@ def learnSomeMoves():
 
 # print(tidy_angles)
 
+
+def larsonScanner():
+    loop_rate = 1 / 25
+    red_level = 25
+
+    count = 0
+    while count <= 5:
+        count += 1
+        # print("Ascending...")
+        for x in range(25, 32):
+            next = x - 1
+            if next == -1:
+                next = 31
+
+            # print(f"X: {x}, Next: {next}")
+
+            pixels[next] = (0, 0, 0)
+            pixels[x] = (red_level, 0, 0)
+
+            time.sleep(loop_rate)
+
+        # print("Decending...")
+        for y in range(31, 23, -1):
+            next = y + 1
+            if next == 32:
+                next = 24
+
+            # print(f"Y: {y}, Next: {next}")
+
+            pixels[next] = (0, 0, 0)
+            pixels[y] = (red_level, 0, 0)
+
+            time.sleep(loop_rate)
+
+
+            pixels[24] = (0, 0, 0)
+
+        time.sleep(0.5)
+
+
+def blinking():
+    loop_rate = 1 / 50
+    red_level = 25
+
+    for x in range(150):        
+        for y in range(24):
+            # print(f"X: {x}, Next: {next}")
+            pixels[y] = (x, x, x)
+
+        for z in range(24, 32):
+            # print(f"X: {x}, Next: {next}")
+            pixels[z] = (0, x, 0)
+            
+        time.sleep(loop_rate)
+    print("blink done")
+
 def wakeUpRoutine():
     # first get positions of all servos
     start_positions = readAllPositions()
@@ -661,8 +733,28 @@ def wakeUpRoutine():
 
 
 setOperatingModes(3)
+
+# # larsonScanner()
+blink_thread = threading.Thread(target=blinking)
+print("start blink thread")
+blink_thread.start()
+print("thread started")
+
+print("wake upstretching")
 wakeUpRoutine()
 
-getch()
-disableAllServos()
+# while True:
+#     print(readAllTemperatures())
+#     time.sleep(4)
+
+#loopReadTemperature()
+
+# getch()
+# disableAllServos()
+
+# for x in range(32):
+#     pixels[x] = (0,0,0)
+
 portHandler.closePort()
+
+print("Exiting")
